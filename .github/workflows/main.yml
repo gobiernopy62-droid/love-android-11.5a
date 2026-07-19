@@ -23,23 +23,27 @@ jobs:
           git clone --branch 11.5 --depth 1 https://github.com/love2d/love.git love/src/jni/love
         fi
 
-    - name: Inject Prebuilt LuaJIT Binaries from Upstream
+    - name: Inject Prebuilt LuaJIT Binaries via Direct Download
       run: |
         echo "=== Verificando binarios estáticos de LuaJIT ==="
-        # Si no existe el archivo .a para arm64, nos traemos los oficiales precompilados
-        if [ ! -f "love/src/jni/LuaJIT-2.1/android/arm64-v8a/libluajit.a" ]; then
-          echo "⚠️ Faltan los binarios de LuaJIT. Extrayendo precompilados del repositorio oficial..."
-          rm -rf temp_upstream
-          
-          # Clonamos el repositorio base de love-android de forma superficial
-          git clone --depth 1 https://github.com/love2d/love-android.git temp_upstream
-          
-          # Aseguramos que la estructura de destino exista y copiamos los binarios
-          mkdir -p love/src/jni/LuaJIT-2.1/android
-          cp -r temp_upstream/love/src/jni/LuaJIT-2.1/android/* love/src/jni/LuaJIT-2.1/android/
-          rm -rf temp_upstream
-          echo "✅ Binarios de LuaJIT inyectados con éxito."
-        fi
+        for ARCH in arm64-v8a armeabi-v7a x86 x86_64; do
+          PATH_A="love/src/jni/LuaJIT-2.1/android/$ARCH/libluajit.a"
+          if [ ! -f "$PATH_A" ]; then
+            echo "📥 Descargando libluajit.a para $ARCH..."
+            mkdir -p "love/src/jni/LuaJIT-2.1/android/$ARCH"
+            
+            # Intentamos descargar desde la rama histórica 'master' que contiene la versión 11.x
+            curl -L -s -o "$PATH_A" "https://github.com/love2d/love-android/raw/master/love/src/jni/LuaJIT-2.1/android/$ARCH/libluajit.a"
+            
+            # Control de fallos: Si el archivo es un 404 (pesa menos de 1KB), probamos con la rama 'main'
+            FILE_SIZE=$(wc -c < "$PATH_A")
+            if [ "$FILE_SIZE" -lt 1000 ]; then
+              echo "⚠️ Reintentando descarga para $ARCH desde rama alternativa..."
+              curl -L -s -o "$PATH_A" "https://github.com/love2d/love-android/raw/main/love/src/jni/LuaJIT-2.1/android/$ARCH/libluajit.a"
+            fi
+          fi
+        done
+        echo "✅ Verificación de binarios completada."
 
     - name: Fix Windows line endings (CRLF to LF) and set permissions
       run: |
