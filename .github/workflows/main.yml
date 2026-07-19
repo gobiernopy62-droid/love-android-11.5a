@@ -10,17 +10,19 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-        submodules: recursive
 
-    - name: Ensure submodules are fully synced (with broken pointer fallback)
+    - name: Force download LÖVE core engine
       run: |
-        git submodule sync
-        # Intentamos actualizar normalmente; si falla por un puntero viejo, lo clonamos a la fuerza
-        git submodule update --init --recursive --force || {
-          echo "¡Alerta! El puntero del submódulo está roto en el fork. Forzando descarga manual de LÖVE 11.5..."
+        # Intentamos por la vía legal primero
+        git submodule sync || true
+        git submodule update --init --recursive --force || true
+        
+        # VÍA FORZADA: Si no existe el archivo clave del motor, lo descargamos a la fuerza
+        if [ ! -f "love/src/jni/love/src/common/config.h" ]; then
+          echo "⚠️ El motor no se descargó por Git. Forzando clonado manual de LÖVE 11.5..."
           rm -rf love/src/jni/love
-          git clone --branch 11.5 https://github.com/love2d/love.git love/src/jni/love
-        }
+          git clone --branch 11.5 --depth 1 https://github.com/love2d/love.git love/src/jni/love
+        fi
 
     - name: Fix Windows line endings (CRLF to LF) and set permissions
       run: |
