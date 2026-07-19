@@ -17,8 +17,9 @@ jobs:
         git submodule sync --recursive
         git submodule update --init --recursive --force
 
-    - name: Make ALL scripts executable
+    - name: Fix Windows line endings (CRLF to LF) and set permissions
       run: |
+        find . -name "*.sh" -type f -exec sed -i 's/\r$//' {} \;
         find . -name "*.sh" -type f -exec chmod +x {} \;
 
     - name: Setup Java 17
