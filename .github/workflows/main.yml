@@ -10,18 +10,33 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        lfs: true # Reactivamos LFS por si los archivos .a están guardados como binarios grandes
 
     - name: Force download LÖVE core engine
       run: |
-        # Intentamos por la vía legal primero
         git submodule sync || true
         git submodule update --init --recursive --force || true
         
-        # VÍA FORZADA: Si no existe el archivo clave del motor, lo descargamos a la fuerza
         if [ ! -f "love/src/jni/love/src/common/config.h" ]; then
           echo "⚠️ El motor no se descargó por Git. Forzando clonado manual de LÖVE 11.5..."
           rm -rf love/src/jni/love
           git clone --branch 11.5 --depth 1 https://github.com/love2d/love.git love/src/jni/love
+        fi
+
+    - name: Compile LuaJIT if build scripts are present
+      run: |
+        cd love/src/jni/LuaJIT-2.1
+        # Si existe un script de compilación global, lo ejecutamos
+        if [ -f "build.sh" ]; then
+          chmod +x build.sh
+          ./build.sh || true
+        # Si usa el script clásico de compilación cruzada por arquitectura
+        elif [ -f "cross_compiler.sh" ]; then
+          chmod +x cross_compiler.sh
+          ./cross_compiler.sh arm64-v8a || true
+          ./cross_compiler.sh armeabi-v7a || true
+          ./cross_compiler.sh x86 || true
+          ./cross_compiler.sh x86_64 || true
         fi
 
     - name: Fix Windows line endings (CRLF to LF) and set permissions
@@ -31,12 +46,10 @@ jobs:
 
     - name: "Debug: Check repository layout"
       run: |
-        echo "=== Estado de los Submódulos ==="
-        git submodule status || true
-        echo "=== Verificando archivos dentro de JNI ==="
-        ls -la love/src/jni/ || true
         echo "=== Verificando archivos de LÖVE nativo ==="
         ls -la love/src/jni/love/src/common/ || true
+        echo "=== Verificando binarios de LuaJIT ==="
+        ls -R love/src/jni/LuaJIT-2.1/android/ || echo "No existe la carpeta android en LuaJIT"
 
     - name: Setup Java 17
       uses: actions/setup-java@v3
