@@ -28,19 +28,23 @@ jobs:
         echo "=== Verificando binarios estáticos de LuaJIT ==="
         for ARCH in arm64-v8a armeabi-v7a x86 x86_64; do
           PATH_A="love/src/jni/LuaJIT-2.1/android/$ARCH/libluajit.a"
-          if [ ! -f "$PATH_A" ]; then
-            echo "📥 Descargando libluajit.a para $ARCH..."
-            mkdir -p "love/src/jni/LuaJIT-2.1/android/$ARCH"
-            
-            # Intentamos descargar desde la rama histórica 'master' que contiene la versión 11.x
-            curl -L -s -o "$PATH_A" "https://github.com/love2d/love-android/raw/master/love/src/jni/LuaJIT-2.1/android/$ARCH/libluajit.a"
-            
-            # Control de fallos: Si el archivo es un 404 (pesa menos de 1KB), probamos con la rama 'main'
-            FILE_SIZE=$(wc -c < "$PATH_A")
-            if [ "$FILE_SIZE" -lt 1000 ]; then
-              echo "⚠️ Reintentando descarga para $ARCH desde rama alternativa..."
-              curl -L -s -o "$PATH_A" "https://github.com/love2d/love-android/raw/main/love/src/jni/LuaJIT-2.1/android/$ARCH/libluajit.a"
+          mkdir -p "love/src/jni/LuaJIT-2.1/android/$ARCH"
+          
+          echo "📥 Descargando libluajit.a para $ARCH..."
+          # Usamos --fail para que curl devuelva error si encuentra un 404 en vez de guardar el HTML
+          # Intentamos primero con la rama dedicada '11.5' del repositorio oficial
+          if ! curl -L --fail -s -o "$PATH_A" "https://github.com/love2d/love-android/raw/11.5/love/src/jni/LuaJIT-2.1/android/$ARCH/libluajit.a"; then
+            echo "⚠️ No se encontró en la rama 11.5, intentando con la rama master..."
+            if ! curl -L --fail -s -o "$PATH_A" "https://github.com/love2d/love-android/raw/master/love/src/jni/LuaJIT-2.1/android/$ARCH/libluajit.a"; then
+              echo "⚠️ Reintentando desde rama main..."
+              curl -L --fail -s -o "$PATH_A" "https://github.com/love2d/love-android/raw/main/love/src/jni/LuaJIT-2.1/android/$ARCH/libluajit.a"
             fi
+          fi
+          
+          # Control estricto: Si el archivo por algún motivo sigue conteniendo HTML, lo destruimos
+          if grep -q "<!DOCTYPE html>" "$PATH_A" 2>/dev/null; then
+            echo "❌ Error crítico: Se filtró una página HTML en $ARCH. Borrando archivo corrupto..."
+            rm -f "$PATH_A"
           fi
         done
         echo "✅ Verificación de binarios completada."
@@ -52,10 +56,8 @@ jobs:
 
     - name: "Debug: Check repository layout"
       run: |
-        echo "=== Verificando archivos de LÖVE nativo ==="
-        ls -la love/src/jni/love/src/common/ || true
-        echo "=== Verificando que LuaJIT tenga sus archivos .a ==="
-        find love/src/jni/LuaJIT-2.1/android/ -name "*.a" || echo "¡Alerta! No se encontraron los archivos .a"
+        echo "=== Verificando que LuaJIT tenga sus archivos .a reales ==="
+        find love/src/jni/LuaJIT-2.1/android/ -name "*.a" -exec ls -lh {} \; || echo "¡Alerta! No se encontraron los archivos .a"
 
     - name: Setup Java 17
       uses: actions/setup-java@v3
