@@ -9,7 +9,13 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
       with:
+        fetch-depth: 0
         submodules: recursive
+
+    - name: Ensure submodules are fully synced
+      run: |
+        git submodule sync --recursive
+        git submodule update --init --recursive --force
 
     - name: Make ALL scripts executable
       run: |
@@ -23,7 +29,7 @@ jobs:
         cache: gradle
 
     - name: Build
-      run: bash ./gradlew assembleNormalRecord assembleEmbedRelease bundleNormalNoRecordRelease bundleEmbedRecordRelease bundleEmbedNoRecordRelease
+      run: bash ./gradlew assembleNormalRecord assembleEmbedRelease bundleNormalNoRecordRelease bundleEmbedRecordRelease bundleEmbedNoRecordRelease --info --stacktrace
 
     - name: Artifact (Normal debug APK)
       uses: actions/upload-artifact@v4
