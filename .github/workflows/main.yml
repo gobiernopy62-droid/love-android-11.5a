@@ -17,7 +17,7 @@ jobs:
         java-version: 17
         cache: gradle
     - name: Make NDK scripts executable
-      run: chmod +x love/src/jni/*.sh
+      run: find love/src/jni -name "*.sh" -type f -exec chmod +x {} \;
     - name: Build
       run: bash ./gradlew assembleNormalRecord assembleEmbedRelease bundleNormalNoRecordRelease bundleEmbedRecordRelease bundleEmbedNoRecordRelease
     - name: Artifact (Normal debug APK)
