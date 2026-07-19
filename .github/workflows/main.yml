@@ -48,6 +48,3 @@ jobs:
       with:
         name: love-android-unstripped-debugsyms
         path: love/build/intermediates/library_jni
-```[cite: 1]
-
-Copia este código completo, pégalo en tu archivo `.github/workflows/main.yml`, guarda y súbelo a tu repositorio. Con esto, el bloqueo de GitHub quedará resuelto.
