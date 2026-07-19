@@ -11,7 +11,7 @@ jobs:
       with:
         fetch-depth: 0
         submodules: recursive
-        lfs: true # <-- ESTO OBLIGA A GITHUB A DESCARGAR LOS BINARIOS DE LÖVE
+        lfs: true
 
     - name: Ensure submodules are fully synced
       run: |
@@ -23,7 +23,7 @@ jobs:
         find . -name "*.sh" -type f -exec sed -i 's/\r$//' {} \;
         find . -name "*.sh" -type f -exec chmod +x {} \;
 
-    - name: Debug: Check repository layout
+    - name: "Debug: Check repository layout"
       run: |
         echo "=== Contenido de la raíz ==="
         ls -la
