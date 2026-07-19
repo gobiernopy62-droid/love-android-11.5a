@@ -11,12 +11,16 @@ jobs:
       with:
         fetch-depth: 0
         submodules: recursive
-        lfs: true
 
-    - name: Ensure submodules are fully synced
+    - name: Ensure submodules are fully synced (with broken pointer fallback)
       run: |
-        git submodule sync --recursive
-        git submodule update --init --recursive --force
+        git submodule sync
+        # Intentamos actualizar normalmente; si falla por un puntero viejo, lo clonamos a la fuerza
+        git submodule update --init --recursive --force || {
+          echo "¡Alerta! El puntero del submódulo está roto en el fork. Forzando descarga manual de LÖVE 11.5..."
+          rm -rf love/src/jni/love
+          git clone --branch 11.5 https://github.com/love2d/love.git love/src/jni/love
+        }
 
     - name: Fix Windows line endings (CRLF to LF) and set permissions
       run: |
@@ -25,12 +29,12 @@ jobs:
 
     - name: "Debug: Check repository layout"
       run: |
-        echo "=== Contenido de la raíz ==="
-        ls -la
-        echo "=== Contenido de la carpeta love ==="
-        ls -la love || true
-        echo "=== Contenido de love/libs ==="
-        ls -la love/libs || true
+        echo "=== Estado de los Submódulos ==="
+        git submodule status || true
+        echo "=== Verificando archivos dentro de JNI ==="
+        ls -la love/src/jni/ || true
+        echo "=== Verificando archivos de LÖVE nativo ==="
+        ls -la love/src/jni/love/src/common/ || true
 
     - name: Setup Java 17
       uses: actions/setup-java@v3
