@@ -8,6 +8,7 @@
     <service android:name="org.love2d.android.DownloadService" />
     <activity
         android:name="org.love2d.android.GameActivity"
+        android:exported="true"
         tools:node="merge" >
       <intent-filter>
         <action android:name="android.intent.action.VIEW" />
