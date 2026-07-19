@@ -10,51 +10,63 @@ jobs:
       uses: actions/checkout@v3
       with:
         submodules: true
+
+    - name: Make ALL scripts executable
+      run: |
+        find . -name "*.sh" -type f -exec chmod +x {} \;
+
     - name: Setup Java 17
       uses: actions/setup-java@v3
       with:
         distribution: adopt-hotspot
         java-version: 17
         cache: gradle
-    - name: Make NDK scripts executable
-      run: find love/src/jni -name "*.sh" -type f -exec chmod +x {} \;
+
     - name: Build
       run: bash ./gradlew assembleNormalRecord assembleEmbedRelease bundleNormalNoRecordRelease bundleEmbedRecordRelease bundleEmbedNoRecordRelease
+
     - name: Artifact (Normal debug APK)
       uses: actions/upload-artifact@v4
       with:
         name: love-android-debug.apk
         path: app/build/outputs/apk/normalRecord/debug/app-normal-record-debug.apk
+
     - name: Artifact (Normal unsigned APK)
       uses: actions/upload-artifact@v4
       with:
         name: love-android.apk
         path: app/build/outputs/apk/normalRecord/release/app-normal-record-release-unsigned.apk
+
     - name: Artifact (Normal AAB w/o recording)
       uses: actions/upload-artifact@v4
       with:
         name: love-android-ps.aab
         path: app/build/outputs/bundle/normalNoRecordRelease/app-normal-noRecord-release.aab
+
     - name: Artifact (Embed AAB)
       uses: actions/upload-artifact@v4
       with:
         name: love-android-embed-record.aab
         path: app/build/outputs/bundle/embedRecordRelease/app-embed-record-release.aab
+
     - name: Artifact (Embed AAB w/o recording)
       uses: actions/upload-artifact@v4
       with:
         name: love-android-embed.aab
         path: app/build/outputs/bundle/embedNoRecordRelease/app-embed-noRecord-release.aab
+
     - name: Artifact (Embed APK w/o recording)
       uses: actions/upload-artifact@v4
       with:
         name: mi-juego-embed-release.apk
         path: app/build/outputs/apk/embedNoRecord/release/app-embed-noRecord-release-unsigned.apk
+
     - name: Artifact (Embed APK w/ recording)
       uses: actions/upload-artifact@v4
       with:
         name: mi-juego-embed-record-release.apk
         path: app/build/outputs/apk/embedRecord/release/app-embed-record-release-unsigned.apk
+
     - name: Artifact (Debug symbols)
       uses: actions/upload-artifact@v4
       with:
