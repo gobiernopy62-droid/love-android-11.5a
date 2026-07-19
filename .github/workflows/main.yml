@@ -10,7 +10,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-        lfs: true # Reactivamos LFS por si los archivos .a están guardados como binarios grandes
+        lfs: true
 
     - name: Force download LÖVE core engine
       run: |
@@ -23,20 +23,22 @@ jobs:
           git clone --branch 11.5 --depth 1 https://github.com/love2d/love.git love/src/jni/love
         fi
 
-    - name: Compile LuaJIT if build scripts are present
+    - name: Inject Prebuilt LuaJIT Binaries from Upstream
       run: |
-        cd love/src/jni/LuaJIT-2.1
-        # Si existe un script de compilación global, lo ejecutamos
-        if [ -f "build.sh" ]; then
-          chmod +x build.sh
-          ./build.sh || true
-        # Si usa el script clásico de compilación cruzada por arquitectura
-        elif [ -f "cross_compiler.sh" ]; then
-          chmod +x cross_compiler.sh
-          ./cross_compiler.sh arm64-v8a || true
-          ./cross_compiler.sh armeabi-v7a || true
-          ./cross_compiler.sh x86 || true
-          ./cross_compiler.sh x86_64 || true
+        echo "=== Verificando binarios estáticos de LuaJIT ==="
+        # Si no existe el archivo .a para arm64, nos traemos los oficiales precompilados
+        if [ ! -f "love/src/jni/LuaJIT-2.1/android/arm64-v8a/libluajit.a" ]; then
+          echo "⚠️ Faltan los binarios de LuaJIT. Extrayendo precompilados del repositorio oficial..."
+          rm -rf temp_upstream
+          
+          # Clonamos el repositorio base de love-android de forma superficial
+          git clone --depth 1 https://github.com/love2d/love-android.git temp_upstream
+          
+          # Aseguramos que la estructura de destino exista y copiamos los binarios
+          mkdir -p love/src/jni/LuaJIT-2.1/android
+          cp -r temp_upstream/love/src/jni/LuaJIT-2.1/android/* love/src/jni/LuaJIT-2.1/android/
+          rm -rf temp_upstream
+          echo "✅ Binarios de LuaJIT inyectados con éxito."
         fi
 
     - name: Fix Windows line endings (CRLF to LF) and set permissions
@@ -48,8 +50,8 @@ jobs:
       run: |
         echo "=== Verificando archivos de LÖVE nativo ==="
         ls -la love/src/jni/love/src/common/ || true
-        echo "=== Verificando binarios de LuaJIT ==="
-        ls -R love/src/jni/LuaJIT-2.1/android/ || echo "No existe la carpeta android en LuaJIT"
+        echo "=== Verificando que LuaJIT tenga sus archivos .a ==="
+        find love/src/jni/LuaJIT-2.1/android/ -name "*.a" || echo "¡Alerta! No se encontraron los archivos .a"
 
     - name: Setup Java 17
       uses: actions/setup-java@v3
