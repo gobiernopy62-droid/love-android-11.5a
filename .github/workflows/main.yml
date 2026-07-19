@@ -16,6 +16,8 @@ jobs:
         distribution: adopt-hotspot
         java-version: 17
         cache: gradle
+    - name: Make NDK scripts executable
+      run: chmod +x love/src/jni/*.sh
     - name: Build
       run: bash ./gradlew assembleNormalRecord assembleEmbedRelease bundleNormalNoRecordRelease bundleEmbedRecordRelease bundleEmbedNoRecordRelease
     - name: Artifact (Normal debug APK)
@@ -43,6 +45,16 @@ jobs:
       with:
         name: love-android-embed.aab
         path: app/build/outputs/bundle/embedNoRecordRelease/app-embed-noRecord-release.aab
+    - name: Artifact (Embed APK w/o recording)
+      uses: actions/upload-artifact@v4
+      with:
+        name: mi-juego-embed-release.apk
+        path: app/build/outputs/apk/embedNoRecord/release/app-embed-noRecord-release-unsigned.apk
+    - name: Artifact (Embed APK w/ recording)
+      uses: actions/upload-artifact@v4
+      with:
+        name: mi-juego-embed-record-release.apk
+        path: app/build/outputs/apk/embedRecord/release/app-embed-record-release-unsigned.apk
     - name: Artifact (Debug symbols)
       uses: actions/upload-artifact@v4
       with:
