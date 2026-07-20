@@ -25,5 +25,21 @@
       android:icon="@drawable/love"
       android:label="${NAME}"
       android:usesCleartextTraffic="true" >
+
+      <!-- AQUÍ ESTÁ LO QUE FALTABA -->
+      <activity
+          android:name="org.love2d.android.GameActivity"
+          android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+          android:label="${NAME}"
+          android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+          android:exported="true">
+
+          <intent-filter>
+              <action android:name="android.intent.action.MAIN" />
+              <category android:name="android.intent.category.LAUNCHER" />
+          </intent-filter>
+
+      </activity>
+
   </application>
 </manifest>
