@@ -102,26 +102,46 @@ jobs:
       run: bash ./gradlew assembleNormalRecord assembleEmbedRelease bundleNormalNoRecordRelease bundleEmbedRecordRelease bundleEmbedNoRecordRelease --info --stacktrace
 
     - name: Firmar APK Embed Release
+      env:
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
       run: |
         echo "=== Preparando Firma de APK ==="
-        echo "${{ secrets.KEYSTORE_BASE64 }}" | grep -v "CERTIFICATE" | base64 -d > mikey.jks
         
+        # Búsqueda dinámica del APK no firmado generado
+        UNSIGNED_APK=$(find app/build/outputs/apk/ -type f -name "*unsigned.apk" | head -n 1)
+        
+        if [ -z "$UNSIGNED_APK" ]; then
+          echo "❌ Error: No se encontró ningún APK no firmado."
+          echo "Estructura de archivos en app/build/outputs/apk/:"
+          ls -R app/build/outputs/apk/ || true
+          exit 1
+        fi
+        
+        echo "✅ APK encontrado en: $UNSIGNED_APK"
+
+        # Decodificación segura de Keystore
+        echo "$KEYSTORE_BASE64" | base64 -d > mikey.jks
+
         BUILD_TOOLS=$(ls -d $ANDROID_HOME/build-tools/*/ | sort -V | tail -n 1)
-        UNSIGNED_APK="app/build/outputs/apk/embedNoRecord/release/app-embed-noRecord-release-unsigned.apk"
         ALIGNED_APK="app-aligned.apk"
         SIGNED_APK="PentagonMan-signed.apk"
-        
-        echo "⚡ Alineando APK..."
+
+        echo "⚡ Alineando APK con zipalign..."
         "$BUILD_TOOLS/zipalign" -v -p 4 "$UNSIGNED_APK" "$ALIGNED_APK"
-        
-        echo "✍️ Firmando APK..."
+
+        echo "✍️ Firmando APK con apksigner..."
         "$BUILD_TOOLS/apksigner" sign \
           --ks mikey.jks \
-          --ks-pass pass:${{ secrets.KEYSTORE_PASSWORD }} \
+          --ks-pass pass:"$KEYSTORE_PASSWORD" \
           --out "$SIGNED_APK" \
           "$ALIGNED_APK"
-          
+
+        echo "🔍 Verificando firma..."
+        "$BUILD_TOOLS/apksigner" verify "$SIGNED_APK"
+
         rm -f mikey.jks "$ALIGNED_APK"
+        echo "🚀 Firma completada exitosamente!"
 
     # --- ARTEFACTOS ---
 
