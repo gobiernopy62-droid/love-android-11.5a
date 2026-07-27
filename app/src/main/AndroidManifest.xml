@@ -26,12 +26,12 @@
       android:label="${NAME}"
       android:usesCleartextTraffic="true" >
 
-      <!-- AQUÍ ESTÁ LO QUE FALTABA -->
       <activity
           android:name="org.love2d.android.GameActivity"
           android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
           android:label="${NAME}"
           android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+          android:screenOrientation="sensorLandscape"
           android:exported="true">
 
           <intent-filter>

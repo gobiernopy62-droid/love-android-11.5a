@@ -1,16 +1,56 @@
 name: build
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch: # Permite ejecutar el flujo manualmente si lo necesitas
 
 jobs:
   build-android:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout
+    - name: Checkout del repositorio
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
         lfs: true
+
+    - name: Setup NDK para libwebp
+      uses: nttld/setup-ndk@v1
+      id: setup-ndk
+      with:
+        ndk-version: r26d
+
+    - name: Clonar y Compilar libwebp (.so)
+      run: |
+        echo "=== Clonando libwebp ==="
+        git clone --branch v1.4.0 --depth 1 https://github.com/webmproject/libwebp.git libwebp-src
+        
+        for ABI in arm64-v8a armeabi-v7a; do
+          echo "🔨 Compilando libwebp para $ABI..."
+          mkdir -p libwebp-src/build-$ABI
+          cd libwebp-src/build-$ABI
+          
+          cmake .. \
+            -DANDROID_ABI=$ABI \
+            -DANDROID_PLATFORM=android-21 \
+            -DCMAKE_TOOLCHAIN_FILE=${{ steps.setup-ndk.outputs.ndk-path }}/build/cmake/android.toolchain.cmake \
+            -DBUILD_SHARED_LIBS=ON \
+            -DWEBP_BUILD_CWEBP=OFF -DWEBP_BUILD_DWEBP=OFF \
+            -DWEBP_BUILD_GIF2WEBP=OFF -DWEBP_BUILD_IMG2WEBP=OFF \
+            -DWEBP_BUILD_VWEBP=OFF -DWEBP_BUILD_WEBPINFO=OFF \
+            -DWEBP_BUILD_EXTRAS=OFF
+            
+          cmake --build . -j4
+          cd ../..
+          
+          # Copiar los .so a la carpeta jniLibs para que Gradle los incluya automáticamente
+          DEST_DIR="app/src/main/jniLibs/$ABI"
+          mkdir -p "$DEST_DIR"
+          find libwebp-src/build-$ABI -name "*.so" -exec cp {} "$DEST_DIR/" \;
+        done
+        rm -rf libwebp-src
 
     - name: Force download LÖVE core engine
       run: |
@@ -31,8 +71,6 @@ jobs:
           mkdir -p "love/src/jni/LuaJIT-2.1/android/$ARCH"
           
           echo "📥 Descargando libluajit.a para $ARCH..."
-          # Usamos --fail para que curl devuelva error si encuentra un 404 en vez de guardar el HTML
-          # Intentamos primero con la rama dedicada '11.5' del repositorio oficial
           if ! curl -L --fail -s -o "$PATH_A" "https://github.com/love2d/love-android/raw/11.5/love/src/jni/LuaJIT-2.1/android/$ARCH/libluajit.a"; then
             echo "⚠️ No se encontró en la rama 11.5, intentando con la rama master..."
             if ! curl -L --fail -s -o "$PATH_A" "https://github.com/love2d/love-android/raw/master/love/src/jni/LuaJIT-2.1/android/$ARCH/libluajit.a"; then
@@ -41,7 +79,6 @@ jobs:
             fi
           fi
           
-          # Control estricto: Si el archivo por algún motivo sigue conteniendo HTML, lo destruimos
           if grep -q "<!DOCTYPE html>" "$PATH_A" 2>/dev/null; then
             echo "❌ Error crítico: Se filtró una página HTML en $ARCH. Borrando archivo corrupto..."
             rm -f "$PATH_A"
@@ -54,11 +91,6 @@ jobs:
         find . -type f \( -name "*.sh" -o -name "*.mk" -o -name "Android.mk" -o -name "Application.mk" \) -exec sed -i 's/\r$//' {} \;
         find . -name "*.sh" -type f -exec chmod +x {} \;
 
-    - name: "Debug: Check repository layout"
-      run: |
-        echo "=== Verificando que LuaJIT tenga sus archivos .a reales ==="
-        find love/src/jni/LuaJIT-2.1/android/ -name "*.a" -exec ls -lh {} \; || echo "¡Alerta! No se encontraron los archivos .a"
-
     - name: Setup Java 17
       uses: actions/setup-java@v3
       with:
@@ -66,8 +98,38 @@ jobs:
         java-version: 17
         cache: gradle
 
-    - name: Build
+    - name: Build con Gradle
       run: bash ./gradlew assembleNormalRecord assembleEmbedRelease bundleNormalNoRecordRelease bundleEmbedRecordRelease bundleEmbedNoRecordRelease --info --stacktrace
+
+    - name: Firmar APK Embed Release
+      run: |
+        echo "=== Preparando Firma de APK ==="
+        echo "${{ secrets.KEYSTORE_BASE64 }}" | grep -v "CERTIFICATE" | base64 -d > mikey.jks
+        
+        BUILD_TOOLS=$(ls -d $ANDROID_HOME/build-tools/*/ | sort -V | tail -n 1)
+        UNSIGNED_APK="app/build/outputs/apk/embedNoRecord/release/app-embed-noRecord-release-unsigned.apk"
+        ALIGNED_APK="app-aligned.apk"
+        SIGNED_APK="PentagonMan-signed.apk"
+        
+        echo "⚡ Alineando APK..."
+        "$BUILD_TOOLS/zipalign" -v -p 4 "$UNSIGNED_APK" "$ALIGNED_APK"
+        
+        echo "✍️ Firmando APK..."
+        "$BUILD_TOOLS/apksigner" sign \
+          --ks mikey.jks \
+          --ks-pass pass:${{ secrets.KEYSTORE_PASSWORD }} \
+          --out "$SIGNED_APK" \
+          "$ALIGNED_APK"
+          
+        rm -f mikey.jks "$ALIGNED_APK"
+
+    # --- ARTEFACTOS ---
+
+    - name: Artifact (Signed Release APK)
+      uses: actions/upload-artifact@v4
+      with:
+        name: PentagonMan-signed.apk
+        path: PentagonMan-signed.apk
 
     - name: Artifact (Normal debug APK)
       uses: actions/upload-artifact@v4
@@ -75,44 +137,8 @@ jobs:
         name: love-android-debug.apk
         path: app/build/outputs/apk/normalRecord/debug/app-normal-record-debug.apk
 
-    - name: Artifact (Normal unsigned APK)
-      uses: actions/upload-artifact@v4
-      with:
-        name: love-android.apk
-        path: app/build/outputs/apk/normalRecord/release/app-normal-record-release-unsigned.apk
-
-    - name: Artifact (Normal AAB w/o recording)
-      uses: actions/upload-artifact@v4
-      with:
-        name: love-android-ps.aab
-        path: app/build/outputs/bundle/normalNoRecordRelease/app-normal-noRecord-release.aab
-
-    - name: Artifact (Embed AAB)
-      uses: actions/upload-artifact@v4
-      with:
-        name: love-android-embed-record.aab
-        path: app/build/outputs/bundle/embedRecordRelease/app-embed-record-release.aab
-
     - name: Artifact (Embed AAB w/o recording)
       uses: actions/upload-artifact@v4
       with:
         name: love-android-embed.aab
         path: app/build/outputs/bundle/embedNoRecordRelease/app-embed-noRecord-release.aab
-
-    - name: Artifact (Embed APK w/o recording)
-      uses: actions/upload-artifact@v4
-      with:
-        name: mi-juego-embed-release.apk
-        path: app/build/outputs/apk/embedNoRecord/release/app-embed-noRecord-release-unsigned.apk
-
-    - name: Artifact (Embed APK w/ recording)
-      uses: actions/upload-artifact@v4
-      with:
-        name: mi-juego-embed-record-release.apk
-        path: app/build/outputs/apk/embedRecord/release/app-embed-record-release-unsigned.apk
-
-    - name: Artifact (Debug symbols)
-      uses: actions/upload-artifact@v4
-      with:
-        name: love-android-unstripped-debugsyms
-        path: love/build/intermediates/library_jni
