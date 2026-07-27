@@ -120,8 +120,14 @@ jobs:
         
         echo "✅ APK encontrado en: $UNSIGNED_APK"
 
-        # Decodificación segura de Keystore
-        echo "$KEYSTORE_BASE64" | base64 -d > mikey.jks
+        # Decodificación ultra segura limpiando saltos de línea
+        echo "$KEYSTORE_BASE64" | tr -d '\r\n' | base64 -d > mikey.jks
+
+        # Validar que el archivo no esté vacío
+        if [ ! -s mikey.jks ]; then
+          echo "❌ Error: El archivo mikey.jks quedó vacío tras decodificar. Revisa el secret KEYSTORE_BASE64."
+          exit 1
+        fi
 
         BUILD_TOOLS=$(ls -d $ANDROID_HOME/build-tools/*/ | sort -V | tail -n 1)
         ALIGNED_APK="app-aligned.apk"
