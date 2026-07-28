@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main, master ]
   pull_request:
-  workflow_dispatch: # Permite ejecutar el flujo manualmente si lo necesitas
+  workflow_dispatch:
 
 jobs:
   build-android:
@@ -16,7 +16,7 @@ jobs:
         fetch-depth: 0
         lfs: true
 
-    # ⚡ AQUÍ ESTÁ LA MAGIA: Verificación Rápida del Keystore
+    # ⚡ Verificación Rápida del Keystore
     - name: Validar Keystore Base64 (Early Check)
       env:
         KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -27,7 +27,6 @@ jobs:
           exit 1
         fi
         
-        # Intenta decodificar el base64 a un archivo temporal (filtrando espacios/saltos de línea)
         echo "$KEYSTORE_BASE64" | tr -d '\r\n ' | base64 -d > /tmp/test_keystore.jks
         
         if [ $? -ne 0 ]; then
@@ -35,13 +34,12 @@ jobs:
           exit 1
         fi
         
-        # Validar que el archivo no quedó vacío
         if [ ! -s /tmp/test_keystore.jks ]; then
-          echo "❌ ERROR: El archivo decodificado está vacío. Revisa el contenido del Secret."
+          echo "❌ ERROR: El archivo decodificado está vacío."
           exit 1
         fi
         
-        echo "✅ Keystore Base64 decodificado correctamente en tiempo récord."
+        echo "✅ Keystore Base64 válido."
         rm -f /tmp/test_keystore.jks
 
     - name: Setup NDK para libwebp
@@ -73,7 +71,6 @@ jobs:
           cmake --build . -j4
           cd ../..
           
-          # Copiar los .so a la carpeta jniLibs para que Gradle los incluya automáticamente
           DEST_DIR="app/src/main/jniLibs/$ABI"
           mkdir -p "$DEST_DIR"
           find libwebp-src/build-$ABI -name "*.so" -exec cp {} "$DEST_DIR/" \;
@@ -100,19 +97,15 @@ jobs:
           
           echo "📥 Descargando libluajit.a para $ARCH..."
           if ! curl -L --fail -s -o "$PATH_A" "https://github.com/love2d/love-android/raw/11.5/love/src/jni/LuaJIT-2.1/android/$ARCH/libluajit.a"; then
-            echo "⚠️ No se encontró en la rama 11.5, intentando con la rama master..."
             if ! curl -L --fail -s -o "$PATH_A" "https://github.com/love2d/love-android/raw/master/love/src/jni/LuaJIT-2.1/android/$ARCH/libluajit.a"; then
-              echo "⚠️ Reintentando desde rama main..."
               curl -L --fail -s -o "$PATH_A" "https://github.com/love2d/love-android/raw/main/love/src/jni/LuaJIT-2.1/android/$ARCH/libluajit.a"
             fi
           fi
           
           if grep -q "<!DOCTYPE html>" "$PATH_A" 2>/dev/null; then
-            echo "❌ Error crítico: Se filtró una página HTML en $ARCH. Borrando archivo corrupto..."
             rm -f "$PATH_A"
           fi
         done
-        echo "✅ Verificación de binarios completada."
 
     - name: Fix Windows line endings (CRLF to LF) and set permissions
       run: |
@@ -126,45 +119,43 @@ jobs:
         java-version: 17
         cache: gradle
 
+    # 🎯 COMPILACIÓN ENFOCADA EN EMBED (Juego Integrado)
     - name: Build con Gradle
-      run: bash ./gradlew assembleNormalRecord assembleEmbedRelease bundleNormalNoRecordRelease bundleEmbedRecordRelease bundleEmbedNoRecordRelease --info --stacktrace
+      run: bash ./gradlew assembleEmbedNoRecordRelease assembleEmbedRecordRelease bundleEmbedNoRecordRelease --info --stacktrace
 
+    # ✍️ FIRMAR EL APK QUE SÍ TIENE EL JUEGO (EMBED)
     - name: Firmar APK Embed Release
       env:
         KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
       run: |
-        echo "=== Preparando Firma de APK ==="
+        echo "=== Preparando Firma del APK de PentagonMan ==="
         
-        # Búsqueda dinámica del APK no firmado generado
-        UNSIGNED_APK=$(find app/build/outputs/apk/ -type f -name "*unsigned.apk" | head -n 1)
+        # Priorizar la búsqueda en la carpeta embed
+        UNSIGNED_APK=$(find app/build/outputs/apk/ -type f -path "*/embed*" -name "*unsigned.apk" | head -n 1)
         
+        # Respaldo si cambia la estructura de carpetas
+        if [ -z "$UNSIGNED_APK" ]; then
+          UNSIGNED_APK=$(find app/build/outputs/apk/ -type f -name "*unsigned.apk" | head -n 1)
+        fi
+
         if [ -z "$UNSIGNED_APK" ]; then
           echo "❌ Error: No se encontró ningún APK no firmado."
-          echo "Estructura de archivos en app/build/outputs/apk/:"
-          ls -R app/build/outputs/apk/ || true
           exit 1
         fi
         
-        echo "✅ APK encontrado en: $UNSIGNED_APK"
+        echo "✅ APK con juego encontrado en: $UNSIGNED_APK"
 
-        # Decodificación ultra segura limpiando saltos de línea
-        echo "$KEYSTORE_BASE64" | tr -d '\r\n' | base64 -d > mikey.jks
-
-        # Validar que el archivo no esté vacío
-        if [ ! -s mikey.jks ]; then
-          echo "❌ Error: El archivo mikey.jks quedó vacío tras decodificar. Revisa el secret KEYSTORE_BASE64."
-          exit 1
-        fi
+        echo "$KEYSTORE_BASE64" | tr -d '\r\n ' | base64 -d > mikey.jks
 
         BUILD_TOOLS=$(ls -d $ANDROID_HOME/build-tools/*/ | sort -V | tail -n 1)
         ALIGNED_APK="app-aligned.apk"
         SIGNED_APK="PentagonMan-signed.apk"
 
-        echo "⚡ Alineando APK con zipalign..."
+        echo "⚡ Alineando APK..."
         "$BUILD_TOOLS/zipalign" -v -p 4 "$UNSIGNED_APK" "$ALIGNED_APK"
 
-        echo "✍️ Firmando APK con apksigner..."
+        echo "✍️ Firmando APK..."
         "$BUILD_TOOLS/apksigner" sign \
           --ks mikey.jks \
           --ks-pass pass:"$KEYSTORE_PASSWORD" \
@@ -175,24 +166,18 @@ jobs:
         "$BUILD_TOOLS/apksigner" verify "$SIGNED_APK"
 
         rm -f mikey.jks "$ALIGNED_APK"
-        echo "🚀 Firma completada exitosamente!"
+        echo "🚀 ¡APK del juego firmado exitosamente!"
 
     # --- ARTEFACTOS ---
 
-    - name: Artifact (Signed Release APK)
+    - name: Artifact (Signed Release APK con Juego)
       uses: actions/upload-artifact@v4
       with:
         name: PentagonMan-signed.apk
         path: PentagonMan-signed.apk
 
-    - name: Artifact (Normal debug APK)
-      uses: actions/upload-artifact@v4
-      with:
-        name: love-android-debug.apk
-        path: app/build/outputs/apk/normalRecord/debug/app-normal-record-debug.apk
-
-    - name: Artifact (Embed AAB w/o recording)
+    - name: Artifact (Embed AAB)
       uses: actions/upload-artifact@v4
       with:
         name: love-android-embed.aab
-        path: app/build/outputs/bundle/embedNoRecordRelease/app-embed-noRecord-release.aab
+        path: app/build/outputs/bundle/embedNoRecordRelease/*.aab
