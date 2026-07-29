@@ -59,6 +59,22 @@ jobs:
         echo "=== Verificando que LuaJIT tenga sus archivos .a reales ==="
         find love/src/jni/LuaJIT-2.1/android/ -name "*.a" -exec ls -lh {} \; || echo "¡Alerta! No se encontraron los archivos .a"
 
+    - name: Copy game.love to assets directories
+      run: |
+        echo "📦 Copiando game.love a los directorios de assets..."
+        mkdir -p app/src/embed/assets
+        mkdir -p app/src/normal/assets
+        
+        # Buscar game.love y copiarlo a ambos directorios
+        if [ -f "app/src/embed/assets/game.love" ]; then
+          echo "✅ game.love encontrado en app/src/embed/assets/"
+          cp app/src/embed/assets/game.love app/src/normal/assets/game.love
+          ls -lh app/src/embed/assets/game.love app/src/normal/assets/game.love
+        else
+          echo "❌ No se encontró game.love en app/src/embed/assets/"
+          exit 1
+        fi
+
     - name: Setup Java 17
       uses: actions/setup-java@v3
       with:
