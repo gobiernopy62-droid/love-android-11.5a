@@ -1,4 +1,4 @@
-name: build
+name: PentagonMan Mobile
 
 on: [push, pull_request]
 
