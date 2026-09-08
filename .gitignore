@@ -29,5 +29,5 @@ build
 .cxx
 
 # love-android specific
-!app/src/main/assets/
-app/src/main/assets/game.love
+!app/src/embed/assets/
+!app/src/embed/assets/game.love
